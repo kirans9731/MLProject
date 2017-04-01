@@ -1,6 +1,6 @@
 import numpy
 
-from sklearn.feature_extraction.text import TfidfTransformer, TfidfVectorizer
+from sklearn.feature_extraction.text import TfidfTransformer, TfidfVectorizer, CountVectorizer
 from sklearn.pipeline import Pipeline
 from sklearn.svm import LinearSVC
 from sklearn.linear_model import LogisticRegression
@@ -13,8 +13,9 @@ def make_classifier(classifier_name):
 
 	classifier_pipeline = []
 
-	classifier_pipeline.append(('vectorizer', TfidfVectorizer(analyzer="word", ngram_range=(1,3), stop_words=None, use_idf = True)))
-	classifier_pipeline.append(('transformer', TfidfTransformer()))
+	#classifier_pipeline.append(('vectorizer', TfidfVectorizer(analyzer="word", ngram_range=(1,3), stop_words=None, use_idf = True)))
+	classifier_pipeline.append(('vectorizer', CountVectorizer()))
+	classifier_pipeline.append(('transformer', TfidfTransformer(use_idf = True)))
 
 	if classifier_name == 'LinearSVC':
 		classifier_pipeline.append(('clsf', LinearSVC()))

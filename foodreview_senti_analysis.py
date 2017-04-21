@@ -13,7 +13,7 @@ def main():
 	data_path = 'data/amazon-fine-foods/Reviews.csv'
 	reviews_df = pandas.read_csv(data_path)
 
-	#reviews_df = reviews_df.head(10)
+	reviews_df = reviews_df.head(1000)
 
 	train, test = train_test_split(reviews_df, test_size = 0.2)
 

@@ -313,7 +313,7 @@ def format_seconds_to_hhmmss(seconds):
     return "%02i:%02i:%02i" % (hours, minutes, seconds)
 
 def main():
-    path = '../Data/Reviews.csv'
+    path = './Data/Reviews.csv'
     reviews = pandas.read_csv(path, usecols=['Summary','Text','Score'])
     reviews["Sentiment"] = reviews["Score"].apply(lambda score: "positive" if score > 3 else "negative")
     

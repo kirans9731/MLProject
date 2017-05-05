@@ -2,12 +2,15 @@ import re
 import numpy
 import pandas
 import string
+import time
 
 from bs4 import BeautifulSoup
 
 from nltk.corpus import stopwords
+from nltk.stem import SnowballStemmer
 from nltk.tokenize import RegexpTokenizer
 
+from sklearn.utils import shuffle
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
 from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import TfidfTransformer, CountVectorizer
@@ -35,7 +38,7 @@ def show_wordcloud(data, title = None):
         max_words=400,
         max_font_size=40, 
         scale=3,
-        random_state=1 # chosen at random by flipping a coin; it was heads
+        random_state=1
     ).generate(str(data))
     
     fig = plt.figure(1, figsize=(8, 8))
@@ -132,7 +135,7 @@ def setstopwords():
 
 def preprocessing(text):
     stop_words = setstopwords()
-    #porter = PorterStemmer("english")
+    stemmer = SnowballStemmer("english")
     try:
         text = re.sub('[0-9]+', ' ', text)
         text = BeautifulSoup(text, "lxml")
@@ -145,6 +148,7 @@ def preprocessing(text):
         text = text.strip('\'"')
         text = " ".join(text.split())
         text = " ".join([word for word in text.split() if word not in stop_words])
+        text = " ".join([ stemmer.stem(word) for word in text.split()])
         return text
     except:
         return []
@@ -174,10 +178,9 @@ def sample(data, diff = 0.05, sampling_method = 'O'):
     total_pos_len = len(data.loc[data['Sentiment'] == 'positive'])
     total_neg_len = len(data.loc[data['Sentiment'] == 'negative'])
     
-    #diff = 0.05
     to_sample = {}
 
-    dist_list = {1:total_pos_len/total_len, -1:total_neg_len/total_len}
+    dist_list = {'positive':total_pos_len/total_len, 'negative':total_neg_len/total_len}
 
     max_value = max(dist_list.values())
 
@@ -201,8 +204,6 @@ def sample(data, diff = 0.05, sampling_method = 'O'):
 
     data = pandas.concat([data, to_append], ignore_index=True)
 
-    print(len(data))
-
     return data
 
 
@@ -220,12 +221,8 @@ def build_classifier(classifier_name):
     elif classifier_name == 'RandomForest':
         classifier_pipeline.append(('clsf', RandomForestClassifier(n_estimators=10)))
     elif classifier_name == 'AdaBoost':
-        classifier_pipeline.append(('clsf', AdaBoostClassifier(n_estimators=100)))
-    elif classifier_name == 'SVMRadialKernel':
-        classifier_pipeline.append(('clsf', SVC(kernel='rbf')))
-    elif classifier_name == 'SVMPolyKernel':
-        classifier_pipeline.append(('clsf', SVC(kernel='poly', degree=3)))
-    
+        classifier_pipeline.append(('clsf', AdaBoostClassifier(n_estimators=10)))
+   
     return Pipeline(classifier_pipeline)
 
 def classify(data, sentiment, classifiers, k = 10):
@@ -261,54 +258,54 @@ def classify(data, sentiment, classifiers, k = 10):
 
 def classify_test_reviews(train, train_sentiment, test, test_sentiment, classifiers):
 
-	results = {}
+    results = {}
 
-	precision_pos = 0.0
-	precision_neg = 0.0
-	recall_pos = 0.0
-	recall_neg = 0.0
-	fscore_pos = 0.0
-	fscore_neg = 0.0
-	overall_accuracy = 0.0
+    precision_pos = 0.0
+    precision_neg = 0.0
+    recall_pos = 0.0
+    recall_neg = 0.0
+    fscore_pos = 0.0
+    fscore_neg = 0.0
+    overall_accuracy = 0.0
 
-	results_per_clsf = {}
+    results_per_clsf = {}
 
-	for clsf_name in classifiers:
+    for clsf_name in classifiers:
 
-		text_classifier = build_classifier(clsf_name)
+        text_classifier = build_classifier(clsf_name)
 
-		text_classifier.fit(train, train_sentiment)
+        text_classifier.fit(train, train_sentiment)
 
-		prediction = text_classifier.predict(test)
-		
-		precision = precision_score(test_sentiment, prediction, labels = ['positive', 'negative'], average=None)
-		recall = recall_score(test_sentiment, prediction, labels = ['positive', 'negative'], average=None)
-		f1score = f1_score(test_sentiment, prediction, labels = ['positive', 'negative'], average=None)
-		accuracy = accuracy_score(test_sentiment, prediction)
+        prediction = text_classifier.predict(test)
 
-		precision_pos += precision[0]
-		precision_neg += precision[1]
-		recall_pos += recall[0]
-		recall_neg += recall[1]
-		fscore_pos += f1score[0]
-		fscore_neg += f1score[1]
-		overall_accuracy += accuracy
+        precision = precision_score(test_sentiment, prediction, labels = ['positive', 'negative'], average=None)
+        recall = recall_score(test_sentiment, prediction, labels = ['positive', 'negative'], average=None)
+        f1score = f1_score(test_sentiment, prediction, labels = ['positive', 'negative'], average=None)
+        accuracy = accuracy_score(test_sentiment, prediction)
 
-		clsf_result = {'precision':precision, 'recall':recall, 'f1score':f1score, 'accuracy':accuracy}
+        precision_pos += precision[0]
+        precision_neg += precision[1]
+        recall_pos += recall[0]
+        recall_neg += recall[1]
+        fscore_pos += f1score[0]
+        fscore_neg += f1score[1]
+        overall_accuracy += accuracy
 
-		results_per_clsf[clsf_name] = clsf_result
+        clsf_result = {'precision':precision, 'recall':recall, 'f1score':f1score, 'accuracy':accuracy}
 
-	print('results per classifier...')	
+        results_per_clsf[clsf_name] = clsf_result
 
-	print(results_per_clsf)
+    print('results per classifier...')  
 
-	print('results of combined classifier...')	
+    print(results_per_clsf)
 
-	results = {'accuracy':overall_accuracy/len(classifiers), '1':{'precision':precision_pos/len(classifiers), 'recall':recall_pos/len(classifiers), 'fscore':fscore_pos/len(classifiers)}, '-1':{'precision':precision_neg/len(classifiers), 'recall':recall_neg/len(classifiers), 'fscore':fscore_neg/len(classifiers)}}	
+    print('results of combined classifier...')  
 
-	print(results)
+    results = {'accuracy':overall_accuracy/len(classifiers), '1':{'precision':precision_pos/len(classifiers), 'recall':recall_pos/len(classifiers), 'fscore':fscore_pos/len(classifiers)}, '-1':{'precision':precision_neg/len(classifiers), 'recall':recall_neg/len(classifiers), 'fscore':fscore_neg/len(classifiers)}} 
 
-	return results
+    print(results)
+
+    return results
 
 def format_seconds_to_hhmmss(seconds):
     hours, seconds =  seconds // 3600, seconds % 3600
@@ -316,75 +313,105 @@ def format_seconds_to_hhmmss(seconds):
     return "%02i:%02i:%02i" % (hours, minutes, seconds)
 
 def main():
-  print('In main')
-	path = 'data/amazon-fine-foods/Reviews.csv'
-	reviews = pandas.read_csv(path, usecols=['Summary','Text','Score'])
-	reviews["Sentiment"] = reviews["Score"].apply(lambda score: "positive" if score > 3 else "negative")
-	show_wordcloud(reviews[reviews.Sentiment == 'positive']["Summary"])
-	show_wordcloud(reviews[reviews.Sentiment == 'negative']["Summary"])
-	show_wordcloud(reviews["Text"])
-	print('Review data frame shape : ', reviews.shape)
-	print(reviews.head(5))
-	print('=============================================================================================')
-	print()
+    path = '../Data/Reviews.csv'
+    reviews = pandas.read_csv(path, usecols=['Summary','Text','Score'])
+    reviews["Sentiment"] = reviews["Score"].apply(lambda score: "positive" if score > 3 else "negative")
+    
+    show_wordcloud(reviews[reviews.Sentiment == 'positive']["Summary"])
+    show_wordcloud(reviews[reviews.Sentiment == 'negative']["Summary"])
+    show_wordcloud(reviews[reviews.Sentiment == 'positive']["Text"])
+    show_wordcloud(reviews[reviews.Sentiment == 'negative']["Text"])
+    
+    print('Review data frame shape : ', reviews.shape)
+    print('=============================================================================================')
+    print('First 5 records')
+    print(reviews.head(5))
+    print('=============================================================================================')
+    print()
 
-	reviewsSubset = reviews.head(10)
-	print(reviewsSubset.shape)
-	print('=============================================================================================')
-	print()
+    trainTestSplit = [0.2]
+    for split in trainTestSplit:
+        train, test = train_test_split(reviews, test_size = split)
 
-  #trainTestSplit = [0,1]
-  #for split in trainTestSplit:
-   # print(split)
-	train, test = train_test_split(reviewsSubset, test_size = 0.2)
+        print()
+        print('Training Data Before Sampling')
+        print('Training Dataset Length = ',len(train))
+        trainPos = train[train.Sentiment == 'positive']
+        trainNeg = train[train.Sentiment == 'negative']
+        print('Positive shape : ', trainPos.shape)
+        print('Negative shape : ', trainNeg.shape)
+        
+        train = sample(train)
+        
+        print()
+        print('Training Data After Sampling')
+        print('Training Dataset Length = ',len(train))
+        positiveTrainReviews = train[train.Sentiment == 'positive']
+        negativeTrainReviews = train[train.Sentiment == 'negative']
+        print('Positive shape : ', positiveTrainReviews.shape)
+        print('Negative shape : ', negativeTrainReviews.shape)
 
-	train = sample(train)
+        print()
 
-	[summary,text,sentiment] = splitData(train)
+        [summary,text,sentiment] = splitData(train)
 
-	#classifiers = ["SVMRadialKernel"]
-	#classifiers = ['LinearSVC']
-	classifiers = ['LogisticRegression', 'MultinomialNB', 'LinearSVC']
+        classifiers = ['LogisticRegression', 'MultinomialNB', 'LinearSVC', 'RandomForest', 'AdaBoost']
 
-	import time
-	textSentiment_StartTime = time.time()
-	_TextSentiment = classify(text, sentiment, classifiers, k=10)
-	textSentiment_EndTime = time.time()
-	textSentiment_Time = format_seconds_to_hhmmss(textSentiment_EndTime - textSentiment_StartTime)
+        textSentiment_StartTime = time.time()
+        _TextSentiment = classify(text, sentiment, classifiers, k=10)
+        textSentiment_EndTime = time.time()
+        textSentiment_Time = format_seconds_to_hhmmss(textSentiment_EndTime - textSentiment_StartTime)
 
-	summarySentiment_StartTime = time.time()
-	_SummarySentiment = classify(summary, sentiment, classifiers, k=10)
-	summarySentiment_EndTime = time.time()
-	summarySentiment_Time = format_seconds_to_hhmmss(summarySentiment_EndTime - summarySentiment_StartTime)
+        summarySentiment_StartTime = time.time()
+        _SummarySentiment = classify(summary, sentiment, classifiers, k=10)
+        summarySentiment_EndTime = time.time()
+        summarySentiment_Time = format_seconds_to_hhmmss(summarySentiment_EndTime - summarySentiment_StartTime)
 
-	print('kFold results')
+        print('Training - kFold results')
+        print('---------------------------------------------------------------------------------------------')
 
-	max_acc_score = 0
-	max_acc_classifier = ''
+        max_acc_score = 0
+        max_acc_classifier = ''
 
-	for classifier in classifiers:
-	    print(classifier)
-	    print('\t\tPrecision - Summary = ', round(_SummarySentiment[classifier]['precision'], 2), '\t\tPrecision - Text = ', round(_TextSentiment[classifier]['precision'],2))
-	    print('\t\tRecall - Summary = ', round(_SummarySentiment[classifier]['recall'],2), '\t\tRecall - Text = ', round(_TextSentiment[classifier]['recall'],2))
-	    print('\t\tF1_score - Summary = ', round(_SummarySentiment[classifier]['f1score'],2), '\t\tF1_score - Text = ', round(_TextSentiment[classifier]['f1score'],2))
-	    print('\t\tAccuracy - Summary = ', round(_SummarySentiment[classifier]['accuracy'],2), '\t\tAccuracy - Text = ', round(_TextSentiment[classifier]['accuracy'],2))
-	    print('---------------------------------------------------------------------------------------------')
+        for classifier in classifiers:
+            print(classifier)
+            print('\t\tPrecision - Summary = ', round(_SummarySentiment[classifier]['precision'], 2), '\t\tPrecision - Text = ', round(_TextSentiment[classifier]['precision'],2))
+            print('\t\tRecall - Summary = ', round(_SummarySentiment[classifier]['recall'],2), '\t\tRecall - Text = ', round(_TextSentiment[classifier]['recall'],2))
+            print('\t\tF1_score - Summary = ', round(_SummarySentiment[classifier]['f1score'],2), '\t\tF1_score - Text = ', round(_TextSentiment[classifier]['f1score'],2))
+            print('\t\tAccuracy - Summary = ', round(_SummarySentiment[classifier]['accuracy'],2), '\t\tAccuracy - Text = ', round(_TextSentiment[classifier]['accuracy'],2))
+            print('---------------------------------------------------------------------------------------------')
 
 
-	print("Execution Time")
-	print("Sentiment analysis using Summary : ", summarySentiment_Time)
-	print("Sentiment analysis using Text    : ", textSentiment_Time)
+        print("Execution Time - Training")
+        print("Sentiment analysis using Summary : ", summarySentiment_Time)
+        print("Sentiment analysis using Text    : ", textSentiment_Time)
+        print()
 
-	[test_summary,test_text,test_sentiment] = splitData(test)
+        print('=============================================================================================')
 
-	print('classifying based on text')
+        [test_summary,test_text,test_sentiment] = splitData(test)
 
-	classify_test_reviews(text,sentiment, test_text,test_sentiment, classifiers)
+        textSentiment_StartTime = time.time()
+        print('Classifying based on text')
+        classify_test_reviews(text,sentiment, test_text,test_sentiment, classifiers)
+        textSentiment_EndTime = time.time()
+        textSentiment_Time = format_seconds_to_hhmmss(textSentiment_EndTime - textSentiment_StartTime)
 
-	print('classifying based on summary')
+        print()
+        summarySentiment_StartTime = time.time()
+        print('Classifying based on summary')
+        classify_test_reviews(summary,sentiment, test_summary,test_sentiment, classifiers)
+        summarySentiment_EndTime = time.time()
+        summarySentiment_Time = format_seconds_to_hhmmss(summarySentiment_EndTime - summarySentiment_StartTime)
 
-	classify_test_reviews(summary,sentiment, test_summary,test_sentiment, classifiers)
+        print('---------------------------------------------------------------------------------------------')
+        print("Execution Time - Testing")
+        print("Sentiment analysis using Summary : ", summarySentiment_Time)
+        print("Sentiment analysis using Text    : ", textSentiment_Time)
+        print()
+
+        print('=============================================================================================')
 
 
 if __name__ == '__main__':
-	main()
+    main()
